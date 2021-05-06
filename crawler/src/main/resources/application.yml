@@ -1,0 +1,11 @@
+spring:
+  datasource:
+    username: root
+    password: root
+    url: jdbc:mysql://127.0.0.1:3306/demo?characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true
+server:
+  port: 8090
+
+
+
+
