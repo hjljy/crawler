@@ -74,6 +74,7 @@ public class AreaCrawler implements ApplicationRunner {
                     String absUrl = aElement.absUrl("href");
                     getCityInfo(provinceCode, provinceRCode, absUrl, next);
                 }
+                System.out.println(provinceName);
                 SysArea area = new SysArea();
                 area.setId(Long.parseLong(provinceRCode));
                 area.setPid(0L);
@@ -135,6 +136,7 @@ public class AreaCrawler implements ApplicationRunner {
                     getCountyInfo(provinceCode, cityCode, cityRCode, absUrl, next);
                 }
             }
+            System.out.println(cityName);
             SysArea area = new SysArea();
             area.setId(Long.parseLong(cityRCode));
             area.setPid(Long.parseLong(provinceRCode));
@@ -195,6 +197,7 @@ public class AreaCrawler implements ApplicationRunner {
                     getStreetInfo(provinceCode, cityCode, countyCode, countyRCode, absUrl, next);
                 }
             }
+            System.out.println(countyName);
             SysArea area = new SysArea();
             area.setId(Long.parseLong(countyRCode));
             area.setPid(Long.parseLong(cityRCode));
@@ -254,6 +257,7 @@ public class AreaCrawler implements ApplicationRunner {
                     getCommitteeInfo(provinceCode, cityCode, countyCode, streetCode, streetRCode, absUrl, next);
                 }
             }
+            System.out.println(streetName);
             SysArea area = new SysArea();
             area.setId(Long.parseLong(streetRCode));
             area.setPid(Long.parseLong(countyRCode));
@@ -264,7 +268,6 @@ public class AreaCrawler implements ApplicationRunner {
             area.setName(streetName);
             area.setSort(sort);
             area.setLevel(4);
-            System.out.println(streetName);
             service.save(area);
             sort++;
         }
@@ -306,6 +309,7 @@ public class AreaCrawler implements ApplicationRunner {
             String type = aElement2.text();
             //社区/乡名称
             String committeeName = aElement3.text();
+            System.out.println(committeeName);
             SysArea area = new SysArea();
             area.setId(Long.parseLong(committeeRCode));
             area.setCommitteeCode(Long.parseLong(committeeRCode));
@@ -318,37 +322,22 @@ public class AreaCrawler implements ApplicationRunner {
             area.setCommitteeType(Long.parseLong(type));
             area.setSort(sort);
             area.setLevel(5);
-            System.out.println(committeeName);
             service.save(area);
             sort++;
         }
     }
 
-    public Document getDocument(Document document, String sourceHtml, int time) throws IOException {
-        if (null == document && time > 0) {
-            try {
-                document = Jsoup.parse(new URL(sourceHtml).openStream(), "GBK", sourceHtml);
-            } catch (Exception xception) {
-                log.warn("链接失败：{}，第几次：{}", sourceHtml, time);
-                if (time == 1) {
-                    xception.printStackTrace();
-//                    throw new IOException();
-                }
-                document = getDocument(null, sourceHtml, time - 1);
-            }
-        }
-        return document;
-    }
-
     public Document getDocument2(Document document, String sourceHtml, int time) throws IOException {
         if (null == document && time > 0) {
             try {
+                //避免生僻字乱码
                 Connection connect = HttpConnection.connect(sourceHtml);
                 connect.header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36 Edg/90.0.818.51");
                 connect.cookie("_trs_uv", "ko2mem1r_6_2wb2");
                 connect.cookie("SF_cookie_1", "37059734");
                 connect.followRedirects(false);
                 BufferedInputStream inputStream = connect.execute().bodyStream();
+                //获取到网页数据，采用GBK编码的方式，避免乱码存在
                 document = Jsoup.parse(inputStream, "GBK", sourceHtml);
             } catch (Exception timeoutException) {
                 log.warn("2链接失败：{}，第几次：{}", sourceHtml, time);
@@ -357,6 +346,7 @@ public class AreaCrawler implements ApplicationRunner {
 //                    throw new IOException();
                 }
                 try {
+                    //减少请求频率，避免被反爬机制监控
                     Thread.sleep(500);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
@@ -374,6 +364,7 @@ public class AreaCrawler implements ApplicationRunner {
                 document = Jsoup.connect(sourceHtml)
                         .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36 Edg/90.0.818.51")
                         .cookie("_trs_uv", "ko2mem1r_6_2wb2")
+                        .followRedirects(false)
                         .get();
             } catch (Exception timeoutException) {
                 log.warn("3链接失败：{}，第几次：{}", sourceHtml, time);
