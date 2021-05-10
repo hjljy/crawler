@@ -68,10 +68,6 @@ public class AreaCrawler implements ApplicationRunner {
                 String href = aElement.attr("href");
                 //省份行政区划代码 2位
                 String provinceCode = href.split("\\.")[0];
-                long code = Long.parseLong(provinceCode);
-                if (code < 54L) {
-                    continue;
-                }
                 //省份行政区划代码 12位
                 String provinceRCode = provinceCode + "0000000000";
                 if (next) {
