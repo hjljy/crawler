@@ -4,7 +4,9 @@ import cn.hjljy.crawler.demo.pojo.jsoupCrawler.po.SysArea;
 import cn.hjljy.crawler.demo.service.jsoupCrawler.ISysAreaService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.jsoup.Connection;
 import org.jsoup.Jsoup;
+import org.jsoup.helper.HttpConnection;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
@@ -13,13 +15,9 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
+import java.io.BufferedInputStream;
 import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.net.SocketTimeoutException;
 import java.net.URL;
-import java.nio.charset.Charset;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * @author hjljy
@@ -31,12 +29,6 @@ import java.util.List;
 public class AreaCrawler implements ApplicationRunner {
     @Resource
     ISysAreaService service;
-
-    public static void main(String[] args) throws IOException {
-//        start();
-    }
-
-
     /**
      * 数据来源网址： 国家统计局2020年统计用区划代码和城乡划分代码
      */
@@ -47,7 +39,7 @@ public class AreaCrawler implements ApplicationRunner {
     public static String COMMITTEE_TEST_HTML = "http://www.stats.gov.cn/tjsj/tjbz/tjyqhdmhcxhfdm/2020/11/01/14/110114003.html";
 
 
-    public void start() throws IOException {
+    public void start(String url) throws IOException {
         //
         getProvinceInfo(SOURCE_HTML, true);
 //        getCityInfo("13","130000000000", CITY_TEST_HTML, true);
@@ -63,10 +55,9 @@ public class AreaCrawler implements ApplicationRunner {
      * @param next       是否获取下一级
      * @throws IOException
      */
-    private void getProvinceInfo(String sourceHtml, boolean next) throws IOException {
-        Document document = this.getDocument(null, sourceHtml, 5);
+    public void getProvinceInfo(String sourceHtml, boolean next) throws IOException {
+        Document document = this.getDocument2(null, sourceHtml, 5);
         int sort = 1;
-        List<SysArea> list = new ArrayList<>();
         //省份信息
         Elements provincetr = document.getElementsByClass("provincetr");
         for (Element element : provincetr) {
@@ -78,15 +69,14 @@ public class AreaCrawler implements ApplicationRunner {
                 //省份行政区划代码 2位
                 String provinceCode = href.split("\\.")[0];
                 long code = Long.parseLong(provinceCode);
+                if (code < 54L) {
+                    continue;
+                }
                 //省份行政区划代码 12位
                 String provinceRCode = provinceCode + "0000000000";
                 if (next) {
                     String absUrl = aElement.absUrl("href");
-                    try {
-                        getCityInfo(provinceCode, provinceRCode, absUrl, next);
-                    } catch (Exception e) {
-                        log.error(provinceName + "获取城市数据失败：" + e.getMessage());
-                    }
+                    getCityInfo(provinceCode, provinceRCode, absUrl, next);
                 }
                 SysArea area = new SysArea();
                 area.setId(Long.parseLong(provinceRCode));
@@ -95,6 +85,7 @@ public class AreaCrawler implements ApplicationRunner {
                 area.setName(provinceName);
                 area.setSort(sort);
                 area.setLevel(1);
+                //保存到数据库
                 service.save(area);
                 sort++;
             }
@@ -110,12 +101,24 @@ public class AreaCrawler implements ApplicationRunner {
      * @param next          是否获取下级
      * @throws IOException
      */
-    private void getCityInfo(String provinceCode, String provinceRCode, String sourceHtml, boolean next) throws IOException {
-        Document document = this.getDocument(null, sourceHtml, 5);
+    public void getCityInfo(String provinceCode, String provinceRCode, String sourceHtml, boolean next) throws IOException {
+        Document document = this.getDocument2(null, sourceHtml, 5);
         int sort = 1;
-        List<SysArea> list = new ArrayList<>();
         //城市信息
+        if (null == document) {
+            if (null == document) {
+                document = this.getDocument3(null, sourceHtml, 5);
+            }
+        }
         Elements citytr = document.getElementsByClass("citytr");
+        if (citytr.size() == 0) {
+            document = this.getDocument3(null, sourceHtml, 5);
+        }
+        citytr = document.getElementsByClass("citytr");
+        if (citytr.size() == 0) {
+            log.error(sourceHtml + "未获取到城市信息");
+            log.error(document.wholeText());
+        }
         for (Element element : citytr) {
             Elements tds = element.getElementsByTag("td");
             Element aElement = tds.get(0);
@@ -133,12 +136,7 @@ public class AreaCrawler implements ApplicationRunner {
                 cityCode = href.split("\\.")[0].split("/")[1];
                 if (next) {
                     String absUrl = a.absUrl("href");
-                    try {
-                        getCountyInfo(provinceCode, cityCode, cityRCode, absUrl, next);
-                    } catch (Exception e) {
-                        log.error(cityName + "获取区/县数据失败" + e.getMessage());
-                        e.printStackTrace();
-                    }
+                    getCountyInfo(provinceCode, cityCode, cityRCode, absUrl, next);
                 }
             }
             SysArea area = new SysArea();
@@ -149,11 +147,11 @@ public class AreaCrawler implements ApplicationRunner {
             area.setName(cityName);
             area.setSort(sort);
             area.setLevel(2);
+            System.out.println(area.toString());
             service.save(area);
             sort++;
         }
     }
-
 
 
     /**
@@ -166,10 +164,20 @@ public class AreaCrawler implements ApplicationRunner {
      * @param next         是否获取下级
      * @throws IOException
      */
-    private void getCountyInfo(String provinceCode, String cityCode, String cityRCode, String sourceHtml, boolean next) throws IOException {
-        Document document = this.getDocument(null, sourceHtml, 5);
+    public void getCountyInfo(String provinceCode, String cityCode, String cityRCode, String sourceHtml, boolean next) throws IOException {
+        Document document = this.getDocument2(null, sourceHtml, 5);
+        if (null == document) {
+            document = this.getDocument3(null, sourceHtml, 5);
+        }
         //城市信息
         Elements countytr = document.getElementsByClass("countytr");
+        if (countytr.size() == 0) {
+            document = this.getDocument3(null, sourceHtml, 5);
+        }
+        countytr = document.getElementsByClass("countytr");
+        if (countytr.size() == 0) {
+            log.error(sourceHtml + "未获取到区、县信息");
+        }
         int sort = 1;
         for (Element element : countytr) {
             Elements tds = element.getElementsByTag("td");
@@ -188,34 +196,48 @@ public class AreaCrawler implements ApplicationRunner {
                 countyCode = href.split("\\.")[0].split("/")[1];
                 if (next) {
                     String absUrl = a.absUrl("href");
-                    try {
-                        getStreetInfo(provinceCode, cityCode, countyCode, countyRCode, absUrl, next);
-                    } catch (Exception e) {
-                        log.error(countyName + "获取数据失败：" + e.getMessage());
-                        e.printStackTrace();
-                    }
+                    getStreetInfo(provinceCode, cityCode, countyCode, countyRCode, absUrl, next);
                 }
             }
             SysArea area = new SysArea();
             area.setId(Long.parseLong(countyRCode));
             area.setPid(Long.parseLong(cityRCode));
-            area.setAreaCode(Long.parseLong(StringUtils.isNotEmpty(countyCode) ? countyCode : countyRCode));
+            area.setAreaCode(Long.parseLong(StringUtils.isNotEmpty(countyCode) ? countyCode : countyRCode.substring(0, 6)));
             area.setCityCode(Long.parseLong(cityCode));
             area.setProvinceCode(Long.parseLong(provinceCode));
             area.setName(countyName);
             area.setSort(sort);
             area.setLevel(3);
-            System.out.println(area.toString());
             service.save(area);
             sort++;
         }
     }
 
-    private void getStreetInfo(String provinceCode, String cityCode, String countyCode, String countyRCode, String sourceHtml, boolean next) throws IOException {
-        Document document = this.getDocument(null, sourceHtml, 5);
+    /**
+     * 获取街道信息
+     * @param provinceCode 省份CODE
+     * @param cityCode  城市code
+     * @param countyCode 区县code
+     * @param countyRCode 区县完整code
+     * @param sourceHtml 街道信息html地址
+     * @param next 是否获取下级区划
+     * @throws IOException 异常
+     */
+    public void getStreetInfo(String provinceCode, String cityCode, String countyCode, String countyRCode, String sourceHtml, boolean next) throws IOException {
+        Document document = this.getDocument2(null, sourceHtml, 5);
+        if (null == document) {
+            document = this.getDocument3(null, sourceHtml, 5);
+        }
         int sort = 1;
         //城市信息
         Elements towntr = document.getElementsByClass("towntr");
+        if (towntr.size() == 0) {
+            document = this.getDocument3(null, sourceHtml, 5);
+        }
+        towntr = document.getElementsByClass("towntr");
+        if (towntr.size() == 0) {
+            log.error(sourceHtml + "未获取到街道信息");
+        }
         for (Element element : towntr) {
             Elements tds = element.getElementsByTag("td");
             Element aElement = tds.get(0);
@@ -233,34 +255,49 @@ public class AreaCrawler implements ApplicationRunner {
                 streetCode = href.split("\\.")[0].split("/")[1];
                 if (next) {
                     String absUrl = a.absUrl("href");
-                    try {
-                        getCommitteeInfo(provinceCode, cityCode, countyCode, streetCode, streetRCode, absUrl, next);
-                    } catch (Exception e) {
-                        log.error(streetName + "获取数据失败" + e.getMessage());
-                        e.printStackTrace();
-                    }
+                    getCommitteeInfo(provinceCode, cityCode, countyCode, streetCode, streetRCode, absUrl, next);
                 }
             }
             SysArea area = new SysArea();
             area.setId(Long.parseLong(streetRCode));
             area.setPid(Long.parseLong(countyRCode));
-            area.setStreetCode(Long.parseLong(StringUtils.isNotEmpty(streetCode) ? countyCode : streetRCode));
+            area.setStreetCode(Long.parseLong(StringUtils.isNotEmpty(streetCode) ? streetCode : streetRCode.substring(0, 9)));
             area.setAreaCode(Long.parseLong(countyCode));
             area.setCityCode(Long.parseLong(cityCode));
             area.setProvinceCode(Long.parseLong(provinceCode));
             area.setName(streetName);
             area.setSort(sort);
             area.setLevel(4);
+            System.out.println(streetName);
             service.save(area);
             sort++;
         }
     }
 
-    private void getCommitteeInfo(String provinceCode, String cityCode, String countyCode, String streetCode, String streetRCode, String sourceHtml, boolean next) throws IOException {
-        Document document = this.getDocument(null, sourceHtml, 5);
-
+    /**
+     * 获取社区、乡村信息
+     * @param provinceCode 省份CODE
+     * @param cityCode  城市code
+     * @param countyCode 区县code
+     * @param sourceHtml 街道信息html地址
+     * @param streetCode 街道code
+     * @param streetRCode 街道完整code
+     * @throws IOException
+     */
+    public void getCommitteeInfo(String provinceCode, String cityCode, String countyCode, String streetCode, String streetRCode, String sourceHtml, boolean next) throws IOException {
+        Document document = this.getDocument2(null, sourceHtml, 5);
+        if (null == document) {
+            document = this.getDocument3(null, sourceHtml, 5);
+        }
         //城市信息
         Elements villagetr = document.getElementsByClass("villagetr");
+        if (villagetr.size() == 0) {
+            document = this.getDocument3(null, sourceHtml, 5);
+        }
+        villagetr = document.getElementsByClass("villagetr");
+        if (villagetr.size() == 0) {
+            log.error(sourceHtml + "未获取到社区信息");
+        }
         int sort = 1;
         for (Element element : villagetr) {
             Elements tds = element.getElementsByTag("td");
@@ -285,18 +322,70 @@ public class AreaCrawler implements ApplicationRunner {
             area.setCommitteeType(Long.parseLong(type));
             area.setSort(sort);
             area.setLevel(5);
+            System.out.println(committeeName);
             service.save(area);
             sort++;
         }
     }
 
-    private Document getDocument(Document document, String sourceHtml, int time) throws IOException {
+    public Document getDocument(Document document, String sourceHtml, int time) throws IOException {
         if (null == document && time > 0) {
             try {
-//                document= Jsoup.connect(sourceHtml).timeout(8000).get();
                 document = Jsoup.parse(new URL(sourceHtml).openStream(), "GBK", sourceHtml);
-            } catch (SocketTimeoutException timeoutException) {
+            } catch (Exception xception) {
+                log.warn("链接失败：{}，第几次：{}", sourceHtml, time);
+                if (time == 1) {
+                    xception.printStackTrace();
+//                    throw new IOException();
+                }
                 document = getDocument(null, sourceHtml, time - 1);
+            }
+        }
+        return document;
+    }
+
+    public Document getDocument2(Document document, String sourceHtml, int time) throws IOException {
+        if (null == document && time > 0) {
+            try {
+                Connection connect = HttpConnection.connect(sourceHtml);
+                connect.header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36 Edg/90.0.818.51");
+                connect.cookie("_trs_uv", "ko2mem1r_6_2wb2");
+                connect.cookie("SF_cookie_1", "37059734");
+                connect.followRedirects(false);
+                BufferedInputStream inputStream = connect.execute().bodyStream();
+                document = Jsoup.parse(inputStream, "GBK", sourceHtml);
+            } catch (Exception timeoutException) {
+                log.warn("2链接失败：{}，第几次：{}", sourceHtml, time);
+                if (time == 1) {
+                    timeoutException.printStackTrace();
+//                    throw new IOException();
+                }
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                document = getDocument2(null, sourceHtml, time - 1);
+            }
+        }
+        return document;
+    }
+
+    public Document getDocument3(Document document, String sourceHtml, int time) throws IOException {
+        if (null == document && time > 0) {
+            try {
+                Thread.sleep(500);
+                document = Jsoup.connect(sourceHtml)
+                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36 Edg/90.0.818.51")
+                        .cookie("_trs_uv", "ko2mem1r_6_2wb2")
+                        .get();
+            } catch (Exception timeoutException) {
+                log.warn("3链接失败：{}，第几次：{}", sourceHtml, time);
+                if (time == 1) {
+                    timeoutException.printStackTrace();
+                    throw new IOException();
+                }
+                document = getDocument3(null, sourceHtml, time - 1);
             }
         }
         return document;
@@ -304,6 +393,6 @@ public class AreaCrawler implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) throws Exception {
-        start();
+//        start(null);
     }
 }
