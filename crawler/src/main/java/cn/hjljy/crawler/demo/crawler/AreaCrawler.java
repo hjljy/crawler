@@ -389,6 +389,6 @@ public class AreaCrawler implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) throws Exception {
-//        start(null);
+        start(null);
     }
 }
