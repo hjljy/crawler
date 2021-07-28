@@ -103,9 +103,7 @@ public class AreaCrawler implements ApplicationRunner {
         int sort = 1;
         //城市信息
         if (null == document) {
-            if (null == document) {
-                document = this.getDocument3(null, sourceHtml, 5);
-            }
+            document = this.getDocument3(null, sourceHtml, 5);
         }
         Elements citytr = document.getElementsByClass("citytr");
         if (citytr.size() == 0) {
@@ -114,7 +112,6 @@ public class AreaCrawler implements ApplicationRunner {
         citytr = document.getElementsByClass("citytr");
         if (citytr.size() == 0) {
             log.error(sourceHtml + "未获取到城市信息");
-            log.error(document.wholeText());
         }
         for (Element element : citytr) {
             Elements tds = element.getElementsByTag("td");
@@ -214,12 +211,13 @@ public class AreaCrawler implements ApplicationRunner {
 
     /**
      * 获取街道信息
+     *
      * @param provinceCode 省份CODE
-     * @param cityCode  城市code
-     * @param countyCode 区县code
-     * @param countyRCode 区县完整code
-     * @param sourceHtml 街道信息html地址
-     * @param next 是否获取下级区划
+     * @param cityCode     城市code
+     * @param countyCode   区县code
+     * @param countyRCode  区县完整code
+     * @param sourceHtml   街道信息html地址
+     * @param next         是否获取下级区划
      * @throws IOException 异常
      */
     public void getStreetInfo(String provinceCode, String cityCode, String countyCode, String countyRCode, String sourceHtml, boolean next) throws IOException {
@@ -275,12 +273,13 @@ public class AreaCrawler implements ApplicationRunner {
 
     /**
      * 获取社区、乡村信息
+     *
      * @param provinceCode 省份CODE
-     * @param cityCode  城市code
-     * @param countyCode 区县code
-     * @param sourceHtml 街道信息html地址
-     * @param streetCode 街道code
-     * @param streetRCode 街道完整code
+     * @param cityCode     城市code
+     * @param countyCode   区县code
+     * @param sourceHtml   街道信息html地址
+     * @param streetCode   街道code
+     * @param streetRCode  街道完整code
      * @throws IOException
      */
     public void getCommitteeInfo(String provinceCode, String cityCode, String countyCode, String streetCode, String streetRCode, String sourceHtml, boolean next) throws IOException {
